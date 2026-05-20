@@ -1,0 +1,9 @@
+[package]
+name = "amberizer"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+onebot_v11 = "0.1.5"
+thiserror = "2.0.18"
+tokio = { version = "1.52.3", features = ["full"] }
