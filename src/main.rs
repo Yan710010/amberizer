@@ -42,7 +42,7 @@ async fn main() {
     });
     let access_token = var("AMBERIZER_TOKEN").ok();
     let cache_dir = var("AMBERIZER_CACHE")
-        .map(|s| PathBuf::from(s))
+        .map(PathBuf::from)
         .ok()
         .filter(|p| p.exists())
         .unwrap_or_else(|| PathBuf::from("cache"));
@@ -149,16 +149,14 @@ async fn process(
     ctr_cache: Option<String>,
 ) -> Result<(), Error> {
     // 首先清理上回发送的缓存
-    for file in std::fs::read_dir("cache")? {
-        if let Ok(e) = file {
-            if let Err(e) = tokio::fs::remove_file(e.path()).await {
-                eprintln!("删除缓存时失败: {e}");
-            }
+    for file in std::fs::read_dir("cache")?.flatten() {
+        if let Err(file) = tokio::fs::remove_file(file.path()).await {
+            eprintln!("删除缓存时失败: {file}");
         }
     }
 
     let mut index = 1u64;
-    let doc = process_nested(connect.clone(), client, msg_id, &mut index, &cache).await?;
+    let doc = process_nested(connect.clone(), client, msg_id, &mut index, cache).await?;
     let filename = format!(
         "聊天记录_{}.md",
         std::time::SystemTime::now()

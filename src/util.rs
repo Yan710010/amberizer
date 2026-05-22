@@ -3,7 +3,7 @@ use std::{collections::HashMap, path::Path, sync::LazyLock};
 use reqwest::{Client, IntoUrl};
 use tokio::io::AsyncWriteExt;
 
-const FACE_DICT: LazyLock<HashMap<&str, &str>> = LazyLock::new(|| {
+static FACE_DICT: LazyLock<HashMap<&str, &str>> = LazyLock::new(|| {
     // 定义 face id 到文本的替换 {{{
     HashMap::from([
         ("4", "[/得意]"),
@@ -151,7 +151,7 @@ pub async fn download_resource(
         filepath.set_file_name(basename.to_string_lossy().to_string() + "_");
     }
     let mut file = tokio::fs::File::create(&filepath).await?;
-    file.write(&bytes).await?;
+    file.write_all(&bytes).await?;
     Ok(filepath
         .file_name()
         .unwrap_or_default()
