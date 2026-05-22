@@ -162,6 +162,38 @@ pub struct GroupMessageSender {
     pub title: Option<String>,
 }
 
+#[derive(Deserialize, Serialize, Debug, Clone, PartialEq, Eq)]
+pub struct MiscMessage {
+    /// 事件发生的时间戳
+    pub time: i64,
+    /// 收到事件的机器人 QQ 号
+    pub self_id: i64,
+    /// 上报类型
+    pub post_type: String,
+    /// 消息类型
+    pub message_type: String,
+    /// 消息子类型
+    pub sub_type: String,
+    /// 消息 ID
+    pub message_id: i64,
+    /// 群号（None则不是群聊消息）
+    pub group_id: Option<i64>,
+    /// 发送者 QQ 号
+    pub user_id: i64,
+    /// 消息内容
+    pub message: Vec<MessageSegment>,
+    /// 原始消息内容
+    pub raw_message: String,
+    /// 发送人信息
+    pub sender: MiscSender,
+}
+
+#[derive(Deserialize, Serialize, Debug, Clone, PartialEq, Eq)]
+pub struct MiscSender {
+    pub nickname: String,
+    pub user_id: i64,
+}
+
 /// 匿名消息结构体
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
 pub struct Anonymous {

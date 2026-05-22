@@ -4,6 +4,10 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-onebot_v11 = "0.1.5"
+anyhow = "1.0.102"
+async-recursion = "1.1.1"
+onebot_v11 = { path = "./vendor/onebotv11_rs/onebot_v11/" }
+reqwest = "0.13.3"
 thiserror = "2.0.18"
 tokio = { version = "1.52.3", features = ["full"] }
+zip = "8.6.0"

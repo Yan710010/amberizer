@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
-use crate::message::segment::MessageSegment;
+use crate::{event::message::MiscMessage, message::segment::MessageSegment};
 
 #[derive(Serialize, Debug, Clone, PartialEq, Eq)]
 pub struct ApiResp {
@@ -213,7 +213,7 @@ pub struct MessageSender {
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
 pub struct GetForwardMsgResponse {
     /// 消息内容
-    pub message: Vec<MessageSegment>,
+    pub messages: Vec<MiscMessage>,
 }
 
 /// 结构体表示获取登录号信息的响应
