@@ -8,24 +8,25 @@
 
 产物位于 target/release/
 
-# 兼容性
+# 运行
 
-It works on my machine.
+可以通过环境变量设置 amberizer 的部分选项，包括
 
-现阶段该程序完全仅服务于我的设备环境:
-- 使用`podman`或`docker`运行的`NapCat`
-- 在程序运行文件夹下存在 cache/ 目录，且容器中该目录被绑定至 /cache/
-- 在 127.0.0.1:17210 监听的 NapCat 正向 WebSocket 连接，token 为 `YesURRightButGenshinImpactIs__`
-- Archlinux（由于我没有在 Windows 上使用过 docker 等容器技术，不确定运作方式是否相似）
-
-如果想要自己运行的话请务必注意以上限制，或者自行修改 src/main.rs 中对于这些路径的定义。
+| 名 | 例 | 默 | 用 |
+| --- | --- | --- | --- |
+| AMBERIZER_HOST | 127.0.0.1 | 127.0.0.1 | websocket 连接地址 |
+| AMBERIZER_PORT | 3001 | 17210 | websocket 连接端口 |
+| AMBERIZER_TOKEN | 55yL5oeC55qE5Y+Y54yr5aiYCg== | - | websocket token，未设置时可留空 |
+| AMBERIZER_CACHE | /tmp/amberizer/cache | ./cache | 存放解析时产生的文件的目录，设置时必须存在 |
+| AMBERIZER_CTR_CACHE | /cache | - | NapCat 容器内映射的cache目录，留空时使用与`AMBERIZER_CACHE`相同的目录 |
+| AMBERIZER_CMD | 生成琥珀 | 帮帮我吧松树大人 | 在群聊中调用时使用的指令正文 |
 
 > 本程序修改了[onebot_v11](https://docs.rs/onebot_v11/)的部分代码以适配 NapCat 的合并转发消息获取接口，因此可能仅适用于 NapCat  
 > ~~除非别的qq onebot框架也用了 NapCat 的这个私有 API 格式~~
 
 # 使用方式
 
-群聊：引用需要琥珀化的合并转发消息，@机器人，正文为「帮帮我吧松树大人」
+群聊：引用需要琥珀化的合并转发消息，@机器人，正文为「帮帮我吧松树大人」（或自定义的指令）
 
 私聊：直接发送合并转发
 
@@ -36,3 +37,10 @@ It works on my machine.
 # 效果图
 ![私聊使用](doc/example/彳亍.png)
 ![群聊使用](doc/example/其实是涩图批量下载工具.png)
+
+
+# 已知问题
+
+- 由于 NapCat 限制，无法解析嵌套聊天记录
+- 无法正确获取发送者的QQ号，以及有概率丢失用户名（回退为"QQ用户"）
+- B站视频分享卡片等数据复杂度稍高且格式不统一（NapCat直接以原始json格式发送内容），暂未解析

@@ -140,10 +140,11 @@ pub async fn download_resource(
     client: &Client,
     url: impl IntoUrl,
     file: String,
+    cache: &Path,
 ) -> Result<String, crate::Error> {
     let res = client.get(url.into_url()?).send().await?;
     let bytes = res.error_for_status()?.bytes().await?;
-    let mut filepath = Path::new("cache").join(file);
+    let mut filepath = cache.join(file);
     while filepath.exists()
         && let Some(basename) = filepath.file_name()
     {
