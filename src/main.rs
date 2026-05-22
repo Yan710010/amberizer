@@ -437,10 +437,10 @@ async fn process_nested(
                         Ok(nested_doc) => {
                             // 写入单独的文件，然后正文里提供引用
                             let file = format!("{index}_Forward.md");
-                            match tokio::fs::write(cache.join(file), nested_doc).await {
+                            match tokio::fs::write(cache.join(&file), nested_doc).await {
                                 Ok(_) => {
                                     *index += 1;
-                                    doc += &format!("[合并转发](file)");
+                                    doc += &format!("[合并转发]({file})");
                                 }
                                 Err(e) => {
                                     eprintln!("写入合并转发文件时出错: {e}");
