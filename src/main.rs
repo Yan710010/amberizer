@@ -164,6 +164,7 @@ async fn process(
             .map_or(0, |d| d.as_secs())
     );
     tokio::fs::write(cache.join(&filename), doc).await?;
+
     //  检查多文件并打包
     let files = std::fs::read_dir(cache)?
         .filter_map(|f| f.ok())
@@ -184,7 +185,7 @@ async fn process(
             if let Some(filename) = path.file_name()
                 && let Ok(mut file) = tokio::fs::File::open(&path).await
             {
-                zip.start_file(filename.to_string_lossy(), SimpleFileOptions::DEFAULT)
+                zip.start_file(filename.to_string_lossy(), SimpleFileOptions::default())
                     .map_err(|e| Error::ArchiveFailed(e.into()))?;
                 let mut buf = vec![0u8; 2 * 1024 * 1024];
                 while let Ok(size) = file.read(&mut buf).await
