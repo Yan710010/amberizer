@@ -59,6 +59,7 @@ async fn main() {
     })
     .await
     .unwrap();
+    println!("成功连接到NapCat");
     let mut rx = connect.subscribe().await;
 
     // 初始化 http client
@@ -104,7 +105,7 @@ async fn main() {
                             .clone()
                             .call_api(ApiPayload::GetMsg(GetMsg { message_id: id }))
                             .await;
-                        dbg!(&api_resp);
+                        //dbg!(&api_resp);
                         if let Ok(resp) = api_resp
                             && let ApiRespData::GetMsgResponse(res) = resp.data
                             && let Some(MS::Forward { data }) = res.message.first()
@@ -260,7 +261,7 @@ async fn process_nested(
     // 绝赞遍历消息列表
     let mut doc = String::new();
     for msg in data.messages {
-        dbg!(&msg);
+        //dbg!(&msg);
         // 该用户发送的消息
         doc += &format!("[{}]:\n", msg.sender.nickname);
         // 遍历消息内容
@@ -314,7 +315,7 @@ async fn process_nested(
                         .await
                         {
                             Ok(file) => {
-                                format!("[!{}]({})\n", summary, file)
+                                format!("![{}]({})\n", summary, file)
                             }
                             Err(e) => {
                                 eprintln!("解析图片时出错: {e}");
