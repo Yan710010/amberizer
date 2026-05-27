@@ -1,6 +1,13 @@
-use std::{collections::HashMap, io::Write, path::Path, sync::Arc};
+use std::{
+    collections::HashMap,
+    env::var,
+    io::Write,
+    path::{Path, PathBuf},
+    sync::Arc,
+};
 
 use async_recursion::async_recursion;
+use chrono::{Datelike, FixedOffset, Timelike};
 use onebot_v11::{
     Event, MessageSegment as MS,
     api::{
@@ -29,16 +36,31 @@ enum Target {
 
 #[tokio::main]
 async fn main() {
+    // 处理用户设置
+    let host = var("AMBERIZER_HOST").unwrap_or_else(|_| "127.0.0.1".into());
+    let port = var("AMBERIZER_PORT").map_or(17210, |s| {
+        s.parse().expect("AMBERIZER_PORT需要设置为0~65535的数字")
+    });
+    let access_token = var("AMBERIZER_TOKEN").ok();
+    let cache_dir = var("AMBERIZER_CACHE")
+        .map(PathBuf::from)
+        .ok()
+        .filter(|p| p.exists())
+        .unwrap_or_else(|| PathBuf::from("cache"));
+    let container_base_cache_dir = var("AMBERIZER_CTR_CACHE").ok();
+    let command = var("AMBERIZER_CMD").unwrap_or_else(|_| "帮帮我吧松树大人".into());
+
     let connect = WsConnect::new(WsConfig {
-        host: "127.0.0.1".into(),
-        port: 17210,
+        host,
+        port,
         r#type: WsType::Universal,
         bot_id: None,
         bot_nick_name: None,
-        access_token: Some("YesURRightButGenshinImpactIs__".into()),
+        access_token,
     })
     .await
     .unwrap();
+    println!("成功连接到NapCat");
     let mut rx = connect.subscribe().await;
 
     // 初始化 http client
@@ -54,6 +76,8 @@ async fn main() {
                             &client,
                             &data.id,
                             Target::Private(message.user_id),
+                            &cache_dir,
+                            container_base_cache_dir.clone(),
                         )
                         .await
                         {
@@ -75,14 +99,14 @@ async fn main() {
                         && let Some(MS::At { data }) = message.message.get(1)
                         && data.qq == message.self_id.to_string()
                         && let Some(MS::Text { data }) = message.message.get(2)
-                        && data.text.trim() == "帮帮我吧松树大人"
+                        && data.text.trim() == command
                     {
                         // 获取引用的消息
                         let api_resp = connect
                             .clone()
                             .call_api(ApiPayload::GetMsg(GetMsg { message_id: id }))
                             .await;
-                        dbg!(&api_resp);
+                        //dbg!(&api_resp);
                         if let Ok(resp) = api_resp
                             && let ApiRespData::GetMsgResponse(res) = resp.data
                             && let Some(MS::Forward { data }) = res.message.first()
@@ -92,6 +116,8 @@ async fn main() {
                                 &client,
                                 &data.id,
                                 Target::Group(message.group_id),
+                                &cache_dir,
+                                container_base_cache_dir.clone(),
                             )
                             .await
                             {
@@ -121,27 +147,28 @@ async fn process(
     client: &Client,
     msg_id: &str,
     target: Target,
+    cache: &Path,
+    ctr_cache: Option<String>,
 ) -> Result<(), Error> {
     // 首先清理上回发送的缓存
-    for file in std::fs::read_dir("cache")? {
-        if let Ok(e) = file {
-            if let Err(e) = tokio::fs::remove_file(e.path()).await {
-                eprintln!("删除缓存时失败: {e}");
-            }
+    for file in std::fs::read_dir("cache")?.flatten() {
+        if let Err(file) = tokio::fs::remove_file(file.path()).await {
+            eprintln!("删除缓存时失败: {file}");
         }
     }
 
     let mut index = 1u64;
-    let doc = process_nested(connect.clone(), client, msg_id, &mut index).await?;
+    let doc = process_nested(connect.clone(), client, msg_id, &mut index, cache).await?;
     let filename = format!(
         "聊天记录_{}.md",
         std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .map_or(0, |d| d.as_secs())
     );
-    tokio::fs::write(Path::new("cache/").join(&filename), doc).await?;
+    tokio::fs::write(cache.join(&filename), doc).await?;
+
     //  检查多文件并打包
-    let files = std::fs::read_dir("cache")?
+    let files = std::fs::read_dir(cache)?
         .filter_map(|f| f.ok())
         .map(|f| f.path())
         .collect::<Vec<_>>();
@@ -153,14 +180,31 @@ async fn process(
                 .duration_since(std::time::UNIX_EPOCH)
                 .map_or(0, |d| d.as_secs())
         );
-        let mut zip_file = std::fs::File::create(format!("cache/{archive_filename}"))
+        let mut zip_file = std::fs::File::create(cache.join(&archive_filename))
             .map_err(|e| Error::ArchiveFailed(e.into()))?;
         let mut zip = ZipWriter::new(&mut zip_file);
         for path in files {
             if let Some(filename) = path.file_name()
                 && let Ok(mut file) = tokio::fs::File::open(&path).await
             {
-                zip.start_file(filename.to_string_lossy(), SimpleFileOptions::DEFAULT)
+                let time = file
+                    .metadata()
+                    .await
+                    .and_then(|m| m.modified())
+                    .map(|t| chrono::DateTime::<chrono::Local>::from(t))
+                    .unwrap_or_default();
+                let opt = SimpleFileOptions::default().last_modified_time(
+                    zip::DateTime::from_date_and_time(
+                        time.year() as u16,
+                        time.month() as u8,
+                        time.day() as u8,
+                        time.hour() as u8,
+                        time.minute() as u8,
+                        time.second() as u8,
+                    )
+                    .unwrap_or_default(),
+                );
+                zip.start_file(filename.to_string_lossy(), opt)
                     .map_err(|e| Error::ArchiveFailed(e.into()))?;
                 let mut buf = vec![0u8; 2 * 1024 * 1024];
                 while let Ok(size) = file.read(&mut buf).await
@@ -177,16 +221,22 @@ async fn process(
         filename
     };
 
+    let send_path = format!(
+        "{}/{filename}",
+        ctr_cache.unwrap_or(cache.to_string_lossy().to_string())
+    );
+    eprintln!("发送文件 {send_path}");
+
     let payload = match target {
         Target::Group(id) => ApiPayload::SendGroupMsg(SendGroupMsg {
             group_id: id,
             auto_escape: false,
-            message: Vec::from([MS::file(format!("/cache/{filename}"), Option::<&str>::None)]),
+            message: Vec::from([MS::file(send_path, Option::<&str>::None)]),
         }),
         Target::Private(id) => ApiPayload::SendPrivateMsg(SendPrivateMsg {
             user_id: id,
             auto_escape: false,
-            message: Vec::from([MS::file(format!("/cache/{filename}"), Option::<&str>::None)]),
+            message: Vec::from([MS::file(send_path, Option::<&str>::None)]),
         }),
     };
     connect.call_api(payload).await?;
@@ -199,6 +249,7 @@ async fn process_nested(
     client: &Client,
     msg_id: &str,
     index: &mut u64,
+    cache: &Path,
 ) -> Result<String, Error> {
     eprintln!("获取合并转发{msg_id}内容...");
     // 获取合并转发内容
@@ -222,9 +273,18 @@ async fn process_nested(
     // 绝赞遍历消息列表
     let mut doc = String::new();
     for msg in data.messages {
-        dbg!(&msg);
+        let msg_time = chrono::DateTime::from_timestamp_secs(msg.time)
+            .unwrap_or_default()
+            .with_timezone(&FixedOffset::east_opt(8 * 3600).unwrap());
+
+        //dbg!(&msg);
         // 该用户发送的消息
-        doc += &format!("[{}]:\n", msg.sender.nickname);
+        doc += &format!(
+            "{} <!-- {} --> {}:\n",
+            msg.sender.nickname,
+            msg.sender.user_id,
+            msg_time.format("%Y-%m-%d %H:%M:%S")
+        );
         // 遍历消息内容
         for ms in msg.message {
             match ms {
@@ -236,6 +296,8 @@ async fn process_nested(
                         client,
                         data.url,
                         index_resource(index, &data.summary),
+                        cache,
+                        msg.time as u64,
                     )
                     .await
                     {
@@ -270,11 +332,13 @@ async fn process_nested(
                             client,
                             url,
                             index_resource(index, &data.file),
+                            cache,
+                            msg.time as u64,
                         )
                         .await
                         {
                             Ok(file) => {
-                                format!("[!{}]({})\n", summary, file)
+                                format!("![{}]({})\n", summary, file)
                             }
                             Err(e) => {
                                 eprintln!("解析图片时出错: {e}");
@@ -287,9 +351,14 @@ async fn process_nested(
                 }
                 MS::Record { data } => {
                     doc += &if let Some(url) = data.url
-                        && let Ok(file) =
-                            util::download_resource(client, url, index_resource(index, &data.file))
-                                .await
+                        && let Ok(file) = util::download_resource(
+                            client,
+                            url,
+                            index_resource(index, &data.file),
+                            cache,
+                            msg.time as u64,
+                        )
+                        .await
                     {
                         format!("[[语音]]({file})\n")
                     } else {
@@ -302,6 +371,8 @@ async fn process_nested(
                             client,
                             url,
                             index_resource(index, &data.file),
+                            cache,
+                            msg.time as u64,
                         )
                         .await
                         {
@@ -323,6 +394,8 @@ async fn process_nested(
                             client,
                             url,
                             index_resource(index, &data.file),
+                            cache,
+                            msg.time as u64,
                         )
                         .await
                         {
@@ -388,14 +461,14 @@ async fn process_nested(
                     doc += &format!("引用 <!-- id: {} 暂无法解析真实引用内容 -->\n", data.id);
                 }
                 MS::Forward { data } => {
-                    match process_nested(connect.clone(), client, &data.id, index).await {
+                    match process_nested(connect.clone(), client, &data.id, index, cache).await {
                         Ok(nested_doc) => {
                             // 写入单独的文件，然后正文里提供引用
                             let file = format!("{index}_Forward.md");
-                            match tokio::fs::write(format!("cache/{file}"), nested_doc).await {
+                            match tokio::fs::write(cache.join(&file), nested_doc).await {
                                 Ok(_) => {
                                     *index += 1;
-                                    doc += &format!("[合并转发](file)");
+                                    doc += &format!("[合并转发]({file})");
                                 }
                                 Err(e) => {
                                     eprintln!("写入合并转发文件时出错: {e}");

@@ -1,9 +1,14 @@
-use std::{collections::HashMap, path::Path, sync::LazyLock};
+use std::{
+    collections::HashMap,
+    io::Write,
+    path::Path,
+    sync::LazyLock,
+    time::{Duration, SystemTime},
+};
 
 use reqwest::{Client, IntoUrl};
-use tokio::io::AsyncWriteExt;
 
-const FACE_DICT: LazyLock<HashMap<&str, &str>> = LazyLock::new(|| {
+static FACE_DICT: LazyLock<HashMap<&str, &str>> = LazyLock::new(|| {
     // 定义 face id 到文本的替换 {{{
     HashMap::from([
         ("4", "[/得意]"),
@@ -140,17 +145,22 @@ pub async fn download_resource(
     client: &Client,
     url: impl IntoUrl,
     file: String,
+    cache: &Path,
+    timestamp: u64,
 ) -> Result<String, crate::Error> {
     let res = client.get(url.into_url()?).send().await?;
     let bytes = res.error_for_status()?.bytes().await?;
-    let mut filepath = Path::new("cache").join(file);
+    let mut filepath = cache.join(file);
     while filepath.exists()
         && let Some(basename) = filepath.file_name()
     {
         filepath.set_file_name(basename.to_string_lossy().to_string() + "_");
     }
-    let mut file = tokio::fs::File::create(&filepath).await?;
-    file.write(&bytes).await?;
+    let mut file = std::fs::File::create(&filepath)?;
+    file.write_all(&bytes)?;
+    let time = SystemTime::UNIX_EPOCH + Duration::from_secs(timestamp);
+    let file_time = std::fs::FileTimes::new().set_modified(time);
+    file.set_times(file_time);
     Ok(filepath
         .file_name()
         .unwrap_or_default()
