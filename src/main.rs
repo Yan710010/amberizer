@@ -7,6 +7,7 @@ use std::{
 };
 
 use async_recursion::async_recursion;
+use chrono::{Datelike, FixedOffset, Timelike};
 use onebot_v11::{
     Event, MessageSegment as MS,
     api::{
@@ -186,7 +187,24 @@ async fn process(
             if let Some(filename) = path.file_name()
                 && let Ok(mut file) = tokio::fs::File::open(&path).await
             {
-                zip.start_file(filename.to_string_lossy(), SimpleFileOptions::default())
+                let time = file
+                    .metadata()
+                    .await
+                    .and_then(|m| m.modified())
+                    .map(|t| chrono::DateTime::<chrono::Local>::from(t))
+                    .unwrap_or_default();
+                let opt = SimpleFileOptions::default().last_modified_time(
+                    zip::DateTime::from_date_and_time(
+                        time.year() as u16,
+                        time.month() as u8,
+                        time.day() as u8,
+                        time.hour() as u8,
+                        time.minute() as u8,
+                        time.second() as u8,
+                    )
+                    .unwrap_or_default(),
+                );
+                zip.start_file(filename.to_string_lossy(), opt)
                     .map_err(|e| Error::ArchiveFailed(e.into()))?;
                 let mut buf = vec![0u8; 2 * 1024 * 1024];
                 while let Ok(size) = file.read(&mut buf).await
@@ -203,28 +221,22 @@ async fn process(
         filename
     };
 
+    let send_path = format!(
+        "{}/{filename}",
+        ctr_cache.unwrap_or(cache.to_string_lossy().to_string())
+    );
+    eprintln!("发送文件 {send_path}");
+
     let payload = match target {
         Target::Group(id) => ApiPayload::SendGroupMsg(SendGroupMsg {
             group_id: id,
             auto_escape: false,
-            message: Vec::from([MS::file(
-                format!(
-                    "{}/{filename}",
-                    ctr_cache.unwrap_or(cache.to_string_lossy().to_string())
-                ),
-                Option::<&str>::None,
-            )]),
+            message: Vec::from([MS::file(send_path, Option::<&str>::None)]),
         }),
         Target::Private(id) => ApiPayload::SendPrivateMsg(SendPrivateMsg {
             user_id: id,
             auto_escape: false,
-            message: Vec::from([MS::file(
-                format!(
-                    "{}/{filename}",
-                    ctr_cache.unwrap_or(cache.to_string_lossy().to_string())
-                ),
-                Option::<&str>::None,
-            )]),
+            message: Vec::from([MS::file(send_path, Option::<&str>::None)]),
         }),
     };
     connect.call_api(payload).await?;
@@ -261,9 +273,18 @@ async fn process_nested(
     // 绝赞遍历消息列表
     let mut doc = String::new();
     for msg in data.messages {
+        let msg_time = chrono::DateTime::from_timestamp_secs(msg.time)
+            .unwrap_or_default()
+            .with_timezone(&FixedOffset::east_opt(8 * 3600).unwrap());
+
         //dbg!(&msg);
         // 该用户发送的消息
-        doc += &format!("[{}]:\n", msg.sender.nickname);
+        doc += &format!(
+            "{} <!-- {} --> {}:\n",
+            msg.sender.nickname,
+            msg.sender.user_id,
+            msg_time.format("%Y-%m-%d %H:%M:%S")
+        );
         // 遍历消息内容
         for ms in msg.message {
             match ms {
@@ -276,6 +297,7 @@ async fn process_nested(
                         data.url,
                         index_resource(index, &data.summary),
                         cache,
+                        msg.time as u64,
                     )
                     .await
                     {
@@ -311,6 +333,7 @@ async fn process_nested(
                             url,
                             index_resource(index, &data.file),
                             cache,
+                            msg.time as u64,
                         )
                         .await
                         {
@@ -333,6 +356,7 @@ async fn process_nested(
                             url,
                             index_resource(index, &data.file),
                             cache,
+                            msg.time as u64,
                         )
                         .await
                     {
@@ -348,6 +372,7 @@ async fn process_nested(
                             url,
                             index_resource(index, &data.file),
                             cache,
+                            msg.time as u64,
                         )
                         .await
                         {
@@ -370,6 +395,7 @@ async fn process_nested(
                             url,
                             index_resource(index, &data.file),
                             cache,
+                            msg.time as u64,
                         )
                         .await
                         {

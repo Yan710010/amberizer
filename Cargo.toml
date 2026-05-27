@@ -6,6 +6,7 @@ edition = "2024"
 [dependencies]
 anyhow = "1.0.102"
 async-recursion = "1.1.1"
+chrono = "0.4.44"
 onebot_v11 = { path = "./vendor/onebotv11_rs/onebot_v11/" }
 reqwest = "0.13.3"
 thiserror = "2.0.18"
