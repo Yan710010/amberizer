@@ -6,6 +6,7 @@ use std::{
     time::{Duration, SystemTime},
 };
 
+use futures_util::StreamExt;
 use reqwest::{Client, IntoUrl};
 
 static FACE_DICT: LazyLock<HashMap<&str, &str>> = LazyLock::new(|| {
@@ -149,7 +150,7 @@ pub async fn download_resource(
     timestamp: u64,
 ) -> Result<String, crate::Error> {
     let res = client.get(url.into_url()?).send().await?;
-    let bytes = res.error_for_status()?.bytes().await?;
+    let mut bytes_stream = res.error_for_status()?.bytes_stream();
     let mut filepath = cache.join(file);
     while filepath.exists()
         && let Some(basename) = filepath.file_name()
@@ -157,7 +158,10 @@ pub async fn download_resource(
         filepath.set_file_name(basename.to_string_lossy().to_string() + "_");
     }
     let mut file = std::fs::File::create(&filepath)?;
-    file.write_all(&bytes)?;
+    while let Some(bytes) = bytes_stream.next().await {
+        let bytes = bytes?;
+        file.write_all(&bytes)?;
+    }
     let time = SystemTime::UNIX_EPOCH + Duration::from_secs(timestamp);
     let file_time = std::fs::FileTimes::new().set_modified(time);
     let _ = file.set_times(file_time);
