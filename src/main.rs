@@ -151,9 +151,9 @@ async fn process(
     ctr_cache: Option<String>,
 ) -> Result<(), Error> {
     // 首先清理上回发送的缓存
-    for file in std::fs::read_dir("cache")?.flatten() {
-        if let Err(file) = tokio::fs::remove_file(file.path()).await {
-            eprintln!("删除缓存时失败: {file}");
+    for file in std::fs::read_dir(cache)?.flatten() {
+        if let Err(e) = tokio::fs::remove_file(file.path()).await {
+            eprintln!("删除旧缓存文件{}时失败: {}", file.file_name().display(), e);
         }
     }
 
@@ -179,7 +179,7 @@ async fn process(
         let archive_filename = format!(
             "聊天记录归档_{}.zip",
             chrono::DateTime::<chrono::Utc>::from(std::time::SystemTime::now())
-            .with_timezone(&timezone)
+                .with_timezone(&timezone)
                 .format("%Y-%m-%d_%H-%M")
         );
         let mut zip_file = std::fs::File::create(cache.join(&archive_filename))
