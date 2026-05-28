@@ -269,6 +269,7 @@ async fn process_nested(
     let qq_name_map: HashMap<i64, String> = data
         .messages
         .iter()
+        .filter(|m| m.sender.user_id != 1094950020)
         .map(|m| (m.sender.user_id, m.sender.nickname.clone()))
         .collect();
 
@@ -282,7 +283,7 @@ async fn process_nested(
         //dbg!(&msg);
         // 该用户发送的消息
         doc += &format!(
-            "{} <!-- {} --> {}:\n",
+            "{} <!-- {} --> {}:  \n",
             msg.sender.nickname,
             // 处理 napcat 设置的占位符
             if msg.sender.user_id != 1094950020 {
