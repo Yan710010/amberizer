@@ -7,8 +7,9 @@ edition = "2024"
 anyhow = "1.0.102"
 async-recursion = "1.1.1"
 chrono = "0.4.44"
+futures-util = "0.3.32"
 onebot_v11 = { path = "./vendor/onebotv11_rs/onebot_v11/" }
-reqwest = "0.13.3"
+reqwest = { version = "0.13.3", features = ["stream"] }
 thiserror = "2.0.18"
 tokio = { version = "1.52.3", features = ["full"] }
 zip = "8.6.0"

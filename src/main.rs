@@ -151,19 +151,21 @@ async fn process(
     ctr_cache: Option<String>,
 ) -> Result<(), Error> {
     // 首先清理上回发送的缓存
-    for file in std::fs::read_dir("cache")?.flatten() {
-        if let Err(file) = tokio::fs::remove_file(file.path()).await {
-            eprintln!("删除缓存时失败: {file}");
+    for file in std::fs::read_dir(cache)?.flatten() {
+        if let Err(e) = tokio::fs::remove_file(file.path()).await {
+            eprintln!("删除旧缓存文件{}时失败: {}", file.file_name().display(), e);
         }
     }
 
     let mut index = 1u64;
     let doc = process_nested(connect.clone(), client, msg_id, &mut index, cache).await?;
+
+    let timezone = FixedOffset::east_opt(8 * 3600).unwrap();
     let filename = format!(
         "聊天记录_{}.md",
-        std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .map_or(0, |d| d.as_secs())
+        chrono::DateTime::<chrono::Utc>::from(std::time::SystemTime::now())
+            .with_timezone(&timezone)
+            .format("%Y-%m-%d_%H-%M")
     );
     tokio::fs::write(cache.join(&filename), doc).await?;
 
@@ -176,9 +178,9 @@ async fn process(
         // 有额外的资源需要打包
         let archive_filename = format!(
             "聊天记录归档_{}.zip",
-            std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .map_or(0, |d| d.as_secs())
+            chrono::DateTime::<chrono::Utc>::from(std::time::SystemTime::now())
+                .with_timezone(&timezone)
+                .format("%Y-%m-%d_%H-%M")
         );
         let mut zip_file = std::fs::File::create(cache.join(&archive_filename))
             .map_err(|e| Error::ArchiveFailed(e.into()))?;
@@ -191,7 +193,7 @@ async fn process(
                     .metadata()
                     .await
                     .and_then(|m| m.modified())
-                    .map(|t| chrono::DateTime::<chrono::Local>::from(t))
+                    .map(|t| chrono::DateTime::<chrono::Utc>::from(t).with_timezone(&timezone))
                     .unwrap_or_default();
                 let opt = SimpleFileOptions::default().last_modified_time(
                     zip::DateTime::from_date_and_time(
@@ -267,6 +269,7 @@ async fn process_nested(
     let qq_name_map: HashMap<i64, String> = data
         .messages
         .iter()
+        .filter(|m| m.sender.user_id != 1094950020)
         .map(|m| (m.sender.user_id, m.sender.nickname.clone()))
         .collect();
 
@@ -280,9 +283,14 @@ async fn process_nested(
         //dbg!(&msg);
         // 该用户发送的消息
         doc += &format!(
-            "{} <!-- {} --> {}:\n",
+            "{} <!-- {} --> {}:  \n",
             msg.sender.nickname,
-            msg.sender.user_id,
+            // 处理 napcat 设置的占位符
+            if msg.sender.user_id != 1094950020 {
+                msg.sender.user_id
+            } else {
+                0
+            },
             msg_time.format("%Y-%m-%d %H:%M:%S")
         );
         // 遍历消息内容

@@ -1,7 +1,7 @@
 # Amberizer 琥珀化
 
 > [!NOTE]  
-> 此github仓库为[源仓库](https://codeberg.org/Yan710010/amberizer)镜像
+> 本仓库仅作引流，主要开发位于[Codeberg上面的仓库](https://codeberg.org/Yan710010/amberizer)
 
 将聊天记录转换为 markdown 文档，基于 onebot v11 协议的 qq 机器人。
 
