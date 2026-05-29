@@ -2,6 +2,11 @@
 
 将聊天记录转换为 markdown 文档，基于 onebot v11 协议的 qq 机器人。
 
+## 使用例
+[由本程序生成的记录](doc/example/例/聊天记录_2026-05-28_23-16.md)  
+![私聊使用](doc/example/彳亍.png)
+![群聊使用](doc/example/其实是涩图批量下载工具.png)
+
 ## 构建
 
 `cargo build --release`
@@ -10,7 +15,7 @@
 
 ## 运行
 
-可以通过环境变量设置 amberizer 的部分选项，包括
+可以通过环境变量或[配置文件](amberizer.conf.md)设置 amberizer 的部分选项，包括
 
 | 名 | 例 | 默 | 用 |
 | --- | --- | --- | --- |
@@ -34,13 +39,9 @@
 
 如果转发内容包含图片、视频等，bot会按顺序下载，并最终打包为 zip 进行发送
 
-## 效果图
-![私聊使用](doc/example/彳亍.png)
-![群聊使用](doc/example/其实是涩图批量下载工具.png)
-
 
 ## 已知问题
 
 - 由于 NapCat 限制，无法解析嵌套聊天记录
-- 无法正确获取发送者的QQ号，以及有概率丢失用户名（回退为"QQ用户"）（不过似乎已经[修了](https://github.com/NapNeko/NapCatQQ/issues/1827)...?
+- 无法正确获取发送者的QQ号，以及有概率丢失用户名（回退为"QQ用户"）（不过似乎已经[修了](https://github.com/NapNeko/NapCatQQ/issues/1827)...?）
 - B站视频分享卡片等数据复杂度稍高且格式不统一（NapCat直接以原始json格式发送内容），暂未解析
