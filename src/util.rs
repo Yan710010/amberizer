@@ -171,3 +171,9 @@ pub async fn download_resource(
         .to_string_lossy()
         .into())
 }
+
+pub fn get_conf_key(key: &str, conf_map: &HashMap<String, String>) -> Option<String> {
+    std::env::var(key)
+        .ok()
+        .or_else(|| conf_map.get(key).cloned())
+}

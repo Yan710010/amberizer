@@ -1,6 +1,5 @@
 use std::{
     collections::HashMap,
-    env::var,
     io::Write,
     path::{Path, PathBuf},
     sync::Arc,
@@ -24,7 +23,10 @@ use reqwest::Client;
 use tokio::io::AsyncReadExt;
 use zip::{ZipWriter, write::SimpleFileOptions};
 
-use crate::{error::Error, util::index_resource};
+use crate::{
+    error::Error,
+    util::{get_conf_key, index_resource},
+};
 
 mod error;
 mod util;
@@ -37,18 +39,29 @@ enum Target {
 #[tokio::main]
 async fn main() {
     // 处理用户设置
-    let host = var("AMBERIZER_HOST").unwrap_or_else(|_| "127.0.0.1".into());
-    let port = var("AMBERIZER_PORT").map_or(17210, |s| {
+    // 读取配置文件
+    let conf_map = std::fs::read_to_string("amberizer.conf")
+        .map(|conf| {
+            conf.lines()
+                .filter_map(|line| line.split_once('='))
+                .map(|(s1, s2)| (s1.trim().to_uppercase(), s2.trim().to_string()))
+                .collect::<HashMap<String, String>>()
+        })
+        .unwrap_or_default();
+    // 优先使用环境变量定义的值，再检测配置文件
+
+    let host = get_conf_key("AMBERIZER_HOST", &conf_map).unwrap_or_else(|| "127.0.0.1".into());
+    let port = get_conf_key("AMBERIZER_PORT", &conf_map).map_or(17210, |s| {
         s.parse().expect("AMBERIZER_PORT需要设置为0~65535的数字")
     });
-    let access_token = var("AMBERIZER_TOKEN").ok();
-    let cache_dir = var("AMBERIZER_CACHE")
+    let access_token = get_conf_key("AMBERIZER_TOKEN", &conf_map);
+    let cache_dir = get_conf_key("AMBERIZER_CACHE", &conf_map)
         .map(PathBuf::from)
-        .ok()
         .filter(|p| p.exists())
         .unwrap_or_else(|| PathBuf::from("cache"));
-    let container_base_cache_dir = var("AMBERIZER_CTR_CACHE").ok();
-    let command = var("AMBERIZER_CMD").unwrap_or_else(|_| "帮帮我吧松树大人".into());
+    let container_base_cache_dir = get_conf_key("AMBERIZER_CTR_CACHE", &conf_map);
+    let command =
+        get_conf_key("AMBERIZER_CMD", &conf_map).unwrap_or_else(|| "帮帮我吧松树大人".into());
 
     let connect = WsConnect::new(WsConfig {
         host,
