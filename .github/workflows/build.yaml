@@ -1,0 +1,78 @@
+name: 构建
+on:
+  push:
+    paths:
+      - '**.rs'
+      - Cargo.toml
+      - Cargo.lock
+  workflow_dispatch:
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: dtolnay/rust-toolchain@stable
+      - run: cargo build --release
+      - uses: actions/upload-artifact@v7
+        with:
+          name: amberizer.exe
+          path: 'target/release/amberizer.exe'
+  build-linux:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: dtolnay/rust-toolchain@stable
+      - run: cargo build --release
+      - uses: actions/upload-artifact@v7
+        with:
+          name: amberizer
+          path: 'target/release/amberizer'
+
+  release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    needs: [build-windows, build-linux]
+    steps:
+      - uses: actions/checkout@v6
+      - name: 检查是否需要创建release
+        id: get_version
+        run: |
+          COMMIT_MSG=$(git log -1 --pretty=%B)
+          echo "Commit message: $COMMIT_MSG"
+          if [[ "$COMMIT_MSG" =~ release:\ v([0-9]+\.[0-9]+\.[0-9]+) ]]; then
+            VERSION="v${BASH_REMATCH[1]}"
+            echo "version=$VERSION" >> $GITHUB_OUTPUT
+          else
+            echo "Not a release commit, skipping."
+            exit 0
+          fi
+      - id: check_exist
+        if: steps.get_version.outputs.version
+        run: |
+          VERSION="${{ steps.get_version.outputs.version }}"
+          if gh release view "$VERSION" &>/dev/null; then
+            echo "exists=true" >> $GITHUB_OUTPUT
+            echo "Release $VERSION already exists, skipping."
+          else
+            echo "exists=false" >> $GITHUB_OUTPUT
+          fi
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: actions/download-artifact@v8
+        if: steps.get_version.outputs.version && steps.check_exist.outputs.exists == 'false'
+        with:
+          merge-multiple: true
+      - name: check
+        run: ls
+      - uses: softprops/action-gh-release@v3
+        with:
+          make_latest: 'true'
+          generate_release_notes: true
+          files: |
+            amberizer
+            amberizer.exe
+          fail_on_unmatched_files: true
+          tag_name: ${{ steps.get_version.outputs.version }}
+          name: Release ${{ steps.get_version.outputs.version }}
