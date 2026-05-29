@@ -11,6 +11,8 @@
 
 产物位于 target/release/
 
+或从[此处](https://github.com/Yan710010/amberizer/releases/latest)下载自动构建（Windows用户下载 amberizer.exe 即可）
+
 ## 运行
 
 可以通过环境变量设置 amberizer 的部分选项，包括
