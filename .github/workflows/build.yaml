@@ -67,6 +67,7 @@ jobs:
       - name: check
         run: ls
       - uses: softprops/action-gh-release@v3
+        if: steps.get_version.outputs.version && steps.check_exist.outputs.exists == 'false'
         with:
           make_latest: 'true'
           generate_release_notes: true

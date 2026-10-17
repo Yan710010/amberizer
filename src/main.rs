@@ -17,7 +17,7 @@ use onebot_v11::{
         WsType,
         ws::{WsConfig, WsConnect},
     },
-    event::message::Message,
+    event::message::{Message, MiscMessage},
 };
 use reqwest::Client;
 use tokio::io::AsyncReadExt;
@@ -29,6 +29,7 @@ use crate::{
 };
 
 mod error;
+mod forward;
 mod util;
 
 enum Target {
@@ -171,7 +172,7 @@ async fn process(
     }
 
     let mut index = 1u64;
-    let doc = process_nested(connect.clone(), client, msg_id, &mut index, cache).await?;
+    let doc = process_nested(connect.clone(), client, msg_id, &mut index, cache, None, 0).await?;
 
     let timezone = FixedOffset::east_opt(8 * 3600).unwrap();
     let filename = format!(
@@ -265,22 +266,26 @@ async fn process_nested(
     msg_id: &str,
     index: &mut u64,
     cache: &Path,
+    embedded_messages: Option<Vec<MiscMessage>>,
+    depth: usize,
 ) -> Result<String, Error> {
     eprintln!("获取合并转发{msg_id}内容...");
-    // 获取合并转发内容
-    let ApiRespData::GetForwardMsgResponse(data) = connect
-        .clone()
-        .call_api(ApiPayload::GetForwardMsg(GetForwardMsg {
-            id: msg_id.into(),
-        }))
-        .await?
-        .data
-    else {
-        return Err(Error::NotForward);
-    };
+    let messages = forward::messages_or_fetch(embedded_messages, depth, async {
+        let ApiRespData::GetForwardMsgResponse(data) = connect
+            .clone()
+            .call_api(ApiPayload::GetForwardMsg(GetForwardMsg {
+                id: msg_id.into(),
+            }))
+            .await?
+            .data
+        else {
+            return Err(Error::NotForward);
+        };
+        Ok(data.messages)
+    })
+    .await?;
     // 获取 qid name 对照表
-    let qq_name_map: HashMap<i64, String> = data
-        .messages
+    let qq_name_map: HashMap<i64, String> = messages
         .iter()
         .filter(|m| m.sender.user_id != 1094950020)
         .map(|m| (m.sender.user_id, m.sender.nickname.clone()))
@@ -288,7 +293,7 @@ async fn process_nested(
 
     // 绝赞遍历消息列表
     let mut doc = String::new();
-    for msg in data.messages {
+    for msg in messages {
         let msg_time = chrono::DateTime::from_timestamp_secs(msg.time)
             .unwrap_or_default()
             .with_timezone(&FixedOffset::east_opt(8 * 3600).unwrap());
@@ -482,7 +487,17 @@ async fn process_nested(
                     doc += &format!("引用 <!-- id: {} 暂无法解析真实引用内容 -->\n", data.id);
                 }
                 MS::Forward { data } => {
-                    match process_nested(connect.clone(), client, &data.id, index, cache).await {
+                    match process_nested(
+                        connect.clone(),
+                        client,
+                        &data.id,
+                        index,
+                        cache,
+                        data.content,
+                        depth + 1,
+                    )
+                    .await
+                    {
                         Ok(nested_doc) => {
                             // 写入单独的文件，然后正文里提供引用
                             let file = format!("{index}_Forward.md");

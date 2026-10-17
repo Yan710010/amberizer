@@ -283,7 +283,10 @@ impl MessageSegment {
 
     pub fn forward(id: impl Into<String>) -> Self {
         MessageSegment::Forward {
-            data: ForwardData { id: id.into() },
+            data: ForwardData {
+                id: id.into(),
+                content: None,
+            },
         }
     }
 
@@ -581,6 +584,9 @@ pub struct ReplyData {
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
 pub struct ForwardData {
     pub id: String,
+    /// NapCat includes inner messages here; their IDs may not be queryable separately.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub content: Option<Vec<crate::event::message::MiscMessage>>,
 }
 
 /// 合并转发节点
